@@ -1,0 +1,7 @@
+flask>=3.0
+pyserial>=3.5
+pillow>=10.0
+numpy>=1.24
+tflite-runtime>=2.14     # Pi-optimised TFLite (no full TF needed)
+# If tflite-runtime is unavailable for your Pi OS, use:
+# tensorflow>=2.15
