@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+
+# Virtual envs
+venv/
+.venv/
+env/
+.env/
+
+# Uploads & model files (large binaries)
+raspberry_pi/uploads/
+raspberry_pi/vision/models/*.tflite
+raspberry_pi/vision/models/*.zip
+
+# Logs
+raspberry_pi/logs/
+
+# Secrets
+*.env
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/settings.json
+.idea/
