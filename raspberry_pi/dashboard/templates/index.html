@@ -55,6 +55,12 @@
   .btn-red    { background: #da3633; color: #fff; }
   .btn-gray   { background: #30363d; color: #e6edf3; }
 
+  /* navigation inputs */
+  .nav-field { display: flex; flex-direction: column; gap: 4px; font-size: 0.78rem; color: #8b949e; }
+  .nav-field input { background: #0d1117; border: 1px solid #30363d; border-radius: 6px;
+                     color: #e6edf3; padding: 8px 10px; font-size: 0.95rem; }
+  .nav-field input:focus { outline: none; border-color: #58a6ff; }
+
   /* upload section */
   .upload-area { border: 2px dashed #30363d; border-radius: 8px; padding: 30px;
                  text-align: center; cursor: pointer; transition: border-color 0.2s; }
@@ -181,6 +187,39 @@
     <div style="margin-top:14px; color:#8b949e; font-size:0.85rem;" id="command-status">Last command: none</div>
   </div>
 
+  <!-- AUTONOMOUS NAVIGATION CARD -->
+  <div class="card">
+    <h2>Autonomous Field Coverage</h2>
+    <p style="color:#8b949e;font-size:0.78rem;margin-bottom:10px;">
+      Set the field size and crop-row spacing, then Start. The robot drives a
+      back-and-forth (lawnmower) pattern to cover the whole area.</p>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+      <label class="nav-field">Field length (m)
+        <input type="number" id="nav-length" value="5" min="0.1" step="0.1">
+      </label>
+      <label class="nav-field">Field width (m)
+        <input type="number" id="nav-width" value="3" min="0.1" step="0.1">
+      </label>
+      <label class="nav-field">Row spacing (m)
+        <input type="number" id="nav-spacing" value="0.5" min="0.05" step="0.05">
+      </label>
+      <label class="nav-field">Speed (1-255)
+        <input type="number" id="nav-speed" value="180" min="1" max="255" step="5">
+      </label>
+    </div>
+    <div style="display:grid; grid-template-columns:2fr 1fr; gap:8px; margin-top:12px;">
+      <button class="btn btn-green" id="nav-start-btn" onclick="startNav()">▶ Start Coverage</button>
+      <button class="btn btn-red"   onclick="stopNav()">■ Stop</button>
+    </div>
+    <div style="margin-top:12px;">
+      <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:#8b949e;">
+        <span id="nav-status">Idle</span>
+        <span id="nav-rowcount"></span>
+      </div>
+      <div class="conf-bar" style="margin-top:6px;"><div class="conf-fill" id="nav-progress" style="width:0%"></div></div>
+    </div>
+  </div>
+
   <!-- IMAGE UPLOAD CARD -->
   <div class="card">
     <h2>Plant Disease Detection</h2>
@@ -275,6 +314,44 @@ async function cmd(action, params={}) {
   }
 }
 
+// ── autonomous navigation ───────────────────────────────────────────────────────
+async function startNav() {
+  const params = {
+    length_m:      parseFloat(document.getElementById('nav-length').value),
+    width_m:       parseFloat(document.getElementById('nav-width').value),
+    row_spacing_m: parseFloat(document.getElementById('nav-spacing').value),
+    speed:         parseInt(document.getElementById('nav-speed').value, 10)
+  };
+  if (!(params.length_m > 0 && params.width_m > 0 && params.row_spacing_m > 0)) {
+    alert('Enter positive values for length, width and row spacing.');
+    return;
+  }
+  await cmd('NAV_START', params);
+}
+
+async function stopNav() {
+  await cmd('NAV_STOP');
+}
+
+function renderNav(nav) {
+  if (!nav) return;
+  const statusEl = document.getElementById('nav-status');
+  const rowEl    = document.getElementById('nav-rowcount');
+  const barEl    = document.getElementById('nav-progress');
+  const startBtn = document.getElementById('nav-start-btn');
+
+  statusEl.textContent = (nav.status || 'idle').replace(/^\w/, c => c.toUpperCase());
+  if (nav.rows > 0) {
+    rowEl.textContent = `Row ${nav.row}/${nav.rows}`;
+    barEl.style.width = `${Math.round((nav.row / nav.rows) * 100)}%`;
+  } else {
+    rowEl.textContent = '';
+    if (!nav.active) barEl.style.width = '0%';
+  }
+  startBtn.disabled = nav.active;
+  startBtn.style.opacity = nav.active ? '0.5' : '1';
+}
+
 // ── state polling ──────────────────────────────────────────────────────────────
 async function pollState() {
   try {
@@ -296,6 +373,8 @@ async function pollState() {
     setVal('val-spray',    s.spray ? 'ON' : 'OFF', s.spray ? 'warn' : 'ok');
     setVal('val-weed',     s.weed  ? 'ON' : 'OFF', s.weed  ? 'warn' : 'ok');
     setVal('val-obstacle', s.obstacle ? 'OBSTACLE!' : 'Clear', s.obstacle ? 'warn' : 'ok');
+
+    renderNav(s.nav);
 
     // gate
     const gateOpen = s.gate === 'open';

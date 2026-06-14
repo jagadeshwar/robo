@@ -18,6 +18,18 @@ GATE_AUTO_CONTROL  = False
 DEFAULT_MOVE_SPEED = 180
 DEFAULT_TURN_SPEED = 160
 
+# ── Autonomous navigation (open-loop, time-based dead reckoning) ──────────────
+# The robot has no wheel encoders/GPS, so coverage distance & turn angle are
+# derived from time. CALIBRATE these two values for accurate field coverage:
+#   1. Send FORWARD at NAV_MOVE_SPEED, time how long to travel a known distance,
+#      then set NAV_FORWARD_CM_PER_SEC = distance_cm / seconds.
+#   2. Send LEFT/RIGHT at NAV_TURN_SPEED, time a full 90° pivot,
+#      then set NAV_TURN_90_SEC = that time in seconds.
+NAV_MOVE_SPEED         = 180    # PWM 0-255 used while driving rows
+NAV_TURN_SPEED         = 160    # PWM 0-255 used while pivoting
+NAV_FORWARD_CM_PER_SEC = 20.0   # ground speed at NAV_MOVE_SPEED (MEASURE THIS)
+NAV_TURN_90_SEC        = 1.0    # seconds for a 90° pivot at NAV_TURN_SPEED (MEASURE THIS)
+
 # Spray: auto-spray when disease or low NPK detected
 SPRAY_DURATION_SEC = 5    # seconds per spray cycle
 

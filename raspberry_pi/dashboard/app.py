@@ -55,7 +55,8 @@ def _allowed_file(filename: str) -> bool:
 _MOTOR_ACTIONS = {"FORWARD", "BACKWARD", "LEFT", "RIGHT", "STOP"}
 _ALL_ALLOWED   = _MOTOR_ACTIONS | {"SPRAY", "SPRAY_ON", "SPRAY_OFF",
                                     "WEED", "WEED_ON", "WEED_OFF",
-                                    "GATE_OPEN", "GATE_CLOSE"}
+                                    "GATE_OPEN", "GATE_CLOSE",
+                                    "NAV_START", "NAV_STOP"}
 
 @socketio.on('motor')
 def ws_motor(data):

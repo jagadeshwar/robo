@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 import config
 from communication.serial_comm import ArduinoComm
 from vision.plant_detector import PlantDetector
+from robot.navigation import NavigationController
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ class RobotController:
     def __init__(self):
         self.arduino  = ArduinoComm(sensor_callback=self._on_sensors)
         self.detector = PlantDetector(config.MODEL_PATH, config.LABELS_PATH, config.IMG_SIZE)
+        self.nav      = NavigationController(self)
         self._queue   = Queue()
         self._worker_thread: Optional[threading.Thread] = None
         self._running = False
@@ -53,6 +55,7 @@ class RobotController:
 
     def stop(self):
         self._running = False
+        self.nav.cancel()
         self.arduino.stop()
         self.arduino.spray_off()
         self.arduino.weed_off()
@@ -220,11 +223,21 @@ class RobotController:
 
     def command(self, action: str, params: dict = None):
         action = action.upper()
+        if action == "NAV_START":
+            self.nav.start(params or {})
+            return
+        if action == "NAV_STOP":
+            self.nav.cancel()
+            return
         if action in self._IMMEDIATE:
+            # A manual motor command overrides any autonomous run for safety.
+            self.nav.cancel()
             self._execute(action, params or {})
         else:
             self._queue.put((action, params or {}))
 
     def get_state(self) -> dict:
         with self._lock:
-            return dict(self.state)
+            state = dict(self.state)
+        state["nav"] = self.nav.status_dict()
+        return state

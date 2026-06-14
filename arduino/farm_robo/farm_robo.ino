@@ -42,9 +42,11 @@
 #define R_IN4   5
 
 // Ultrasonic sensors (HC-SR04)
-// Wiring from photos: FRONT TRIG=D12, FRONT ECHO=D13
+// FRONT TRIG=D12, FRONT ECHO=D11
+// NOTE: ECHO must NOT be on D13 — pin 13 has the onboard LED + resistor which
+// loads the pin and makes the echo pulse unreadable (constant 999/no echo).
 #define FRONT_TRIG  12
-#define FRONT_ECHO  13
+#define FRONT_ECHO  11
 // LEFT/RIGHT sensors not present in provided photo; keep defaults for boards that support them
 #define LEFT_TRIG   32
 #define LEFT_ECHO   33
