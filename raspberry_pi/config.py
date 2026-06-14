@@ -1,7 +1,7 @@
 import os
 
 # Serial port to Arduino (check with: ls /dev/ttyUSB* or ls /dev/ttyACM*)
-ARDUINO_PORT     = os.getenv("ARDUINO_PORT", "/dev/ttyUSB0")
+ARDUINO_PORT     = os.getenv("ARDUINO_PORT", "/dev/ttyACM1")
 ARDUINO_BAUDRATE = 115200
 
 # Sensor thresholds
@@ -12,7 +12,11 @@ NPK_P_LOW_THRESHOLD = 10
 NPK_K_LOW_THRESHOLD = 15
 
 # Gate logic: auto-open when average moisture < MOISTURE_DRY_PCT
-GATE_AUTO_CONTROL  = True
+GATE_AUTO_CONTROL  = False
+
+# Motion defaults used when UI commands omit speed or duration
+DEFAULT_MOVE_SPEED = 180
+DEFAULT_TURN_SPEED = 160
 
 # Spray: auto-spray when disease or low NPK detected
 SPRAY_DURATION_SEC = 5    # seconds per spray cycle

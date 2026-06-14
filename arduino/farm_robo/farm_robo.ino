@@ -20,21 +20,32 @@
 #include <Servo.h>
 #include <DHT.h>
 
+// Detect hardware Serial1 availability (Mega/2560 have Serial1)
+#if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega1280__)
+#define HAS_SERIAL1 1
+#else
+#define HAS_SERIAL1 0
+#endif
+
 // ─── PIN DEFINITIONS ────────────────────────────────────────────────────────
 
 // L298N Motor Driver - Left side
-#define L_ENA   5   // PWM speed left
-#define L_IN1   6
+// Wiring from photos: ENA=D9, IN1=D8, IN2=D7
+#define L_ENA   9   // PWM speed left
+#define L_IN1   8
 #define L_IN2   7
 
 // L298N Motor Driver - Right side
-#define R_ENB   9   // PWM speed right
-#define R_IN3  10
-#define R_IN4  11
+// Wiring from photos: ENB=D3, IN3=D6, IN4=D5
+#define R_ENB   3   // PWM speed right
+#define R_IN3   6
+#define R_IN4   5
 
 // Ultrasonic sensors (HC-SR04)
-#define FRONT_TRIG  30
-#define FRONT_ECHO  31
+// Wiring from photos: FRONT TRIG=D12, FRONT ECHO=D13
+#define FRONT_TRIG  12
+#define FRONT_ECHO  13
+// LEFT/RIGHT sensors not present in provided photo; keep defaults for boards that support them
 #define LEFT_TRIG   32
 #define LEFT_ECHO   33
 #define RIGHT_TRIG  34
@@ -76,7 +87,7 @@ Servo gateServo;
 bool   sprayActive    = false;
 bool   weedActive     = false;
 bool   gateOpen       = false;
-int    motorSpeed     = MAX_MOTOR_SPEED;
+int    motorSpeed     = 0; // safe default: require explicit SPEED command or non-zero val
 unsigned long lastSensorReport = 0;
 unsigned long lastNPKQuery     = 0;
 
@@ -135,24 +146,9 @@ void turnRight(int speed) {
 
 // ─── NPK SENSOR (RS485) ───────────────────────────────────────────────────────
 
+// NPK/RS485 not used on Uno build here — provide empty stub
 void queryNPK() {
-  digitalWrite(RS485_DE_RE, HIGH);  // transmit mode
-  delay(1);
-  Serial1.write(NPK_QUERY, sizeof(NPK_QUERY));
-  Serial1.flush();
-  digitalWrite(RS485_DE_RE, LOW);   // receive mode
-  delay(200);
-
-  if (Serial1.available() >= 11) {
-    byte buf[11];
-    Serial1.readBytes(buf, 11);
-    // Response bytes 3-4: N, 5-6: P, 7-8: K (big-endian uint16)
-    if (buf[0] == 0x01 && buf[1] == 0x03 && buf[2] == 0x06) {
-      npkN = (buf[3] << 8) | buf[4];
-      npkP = (buf[5] << 8) | buf[6];
-      npkK = (buf[7] << 8) | buf[8];
-    }
-  }
+  // NOP: RS485 NPK sensor disabled in this build
 }
 
 // ─── JSON COMMAND PARSER ──────────────────────────────────────────────────────
@@ -178,11 +174,13 @@ String extractJsonString(const String& json, const String& key) {
 void handleCommand(const String& json) {
   String cmd = extractJsonString(json, "cmd");
   int    val  = extractJsonString(json, "val").toInt();
+  int    clampVal = constrain(val, 0, 255);
+  int    useSpeed = (clampVal > 0) ? clampVal : motorSpeed; // motorSpeed defaults to 0 for safety
 
-  if      (cmd == "FORWARD")   moveForward(val > 0 ? val : motorSpeed);
-  else if (cmd == "BACKWARD")  moveBackward(val > 0 ? val : motorSpeed);
-  else if (cmd == "LEFT")      turnLeft(val > 0 ? val : motorSpeed);
-  else if (cmd == "RIGHT")     turnRight(val > 0 ? val : motorSpeed);
+  if      (cmd == "FORWARD")   moveForward(useSpeed);
+  else if (cmd == "BACKWARD")  moveBackward(useSpeed);
+  else if (cmd == "LEFT")      turnLeft(useSpeed);
+  else if (cmd == "RIGHT")     turnRight(useSpeed);
   else if (cmd == "STOP")      stopMotors();
   else if (cmd == "SPEED")     motorSpeed = constrain(val, 0, 255);
   else if (cmd == "SPRAY_ON")  { digitalWrite(SPRAY_RELAY, HIGH); sprayActive = true; }
@@ -254,7 +252,7 @@ void sendSensorReport() {
 
 void setup() {
   Serial.begin(115200);   // Pi communication
-  Serial1.begin(9600);    // NPK RS485 sensor
+  // NPK RS485 sensor not initialized on Uno build
 
   // Motor driver pins
   pinMode(L_ENA, OUTPUT); pinMode(L_IN1, OUTPUT); pinMode(L_IN2, OUTPUT);
@@ -287,8 +285,8 @@ void loop() {
     if (line.startsWith("{")) handleCommand(line);
   }
 
-  // Send sensor report every 500 ms
-  if (millis() - lastSensorReport >= 500) {
+  // Send sensor report every 2000 ms
+  if (millis() - lastSensorReport >= 2000) {
     lastSensorReport = millis();
     sendSensorReport();
   }

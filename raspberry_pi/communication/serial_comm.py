@@ -2,14 +2,17 @@
 Serial communication layer between Raspberry Pi and Arduino.
 Sends JSON command lines; parses incoming JSON sensor reports.
 """
-
 import json
 import logging
 import threading
 import time
 from typing import Callable, Optional
 
-import serial
+try:
+    import serial
+    _SERIAL_AVAILABLE = True
+except ImportError:
+    _SERIAL_AVAILABLE = False
 
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
@@ -31,23 +34,37 @@ class ArduinoComm:
 
     # ── connection ─────────────────────────────────────────────────────────────
 
+    def _detect_port(self) -> str:
+        """Return first available ttyACM* or ttyUSB* port, or the configured default."""
+        import glob
+        for pattern in ("/dev/ttyACM*", "/dev/ttyUSB*"):
+            ports = sorted(glob.glob(pattern))
+            if ports:
+                logger.info("Auto-detected Arduino port: %s", ports[0])
+                return ports[0]
+        return self._port
+
     def connect(self, retries: int = 5) -> bool:
+        if not _SERIAL_AVAILABLE:
+            logger.warning("pyserial not installed — running without Arduino")
+            return False
+        port = self._detect_port()
         for attempt in range(retries):
             try:
                 self._ser = serial.Serial(
-                    self._port, self._baud,
+                    port, self._baud,
                     timeout=1, write_timeout=2
                 )
                 time.sleep(2)           # let Arduino reset after DTR
                 self._running = True
                 self._thread  = threading.Thread(target=self._reader, daemon=True)
                 self._thread.start()
-                logger.info("Arduino connected on %s", self._port)
+                logger.info("Arduino connected on %s", port)
                 return True
-            except serial.SerialException as e:
+            except (serial.SerialException, OSError) as e:
                 logger.warning("Connect attempt %d failed: %s", attempt + 1, e)
                 time.sleep(2)
-        logger.error("Could not open Arduino serial port %s", self._port)
+        logger.error("Could not open Arduino serial port %s", port)
         return False
 
     def disconnect(self):
@@ -59,8 +76,10 @@ class ArduinoComm:
     # ── reader thread ──────────────────────────────────────────────────────────
 
     def _reader(self):
-        buffer = ""
         while self._running:
+            if not self._ser or not self._ser.is_open:
+                time.sleep(1)
+                continue
             try:
                 raw = self._ser.readline().decode("utf-8", errors="ignore").strip()
                 if not raw:
@@ -84,16 +103,34 @@ class ArduinoComm:
                     logger.debug("Arduino msg: %s", data)
             except Exception as e:
                 if self._running:
-                    logger.error("Reader error: %s", e)
-                    time.sleep(0.5)
+                    logger.warning("Serial read error — reconnecting: %s", e)
+                    try:
+                        if self._ser:
+                            self._ser.close()
+                    except Exception:
+                        pass
+                    self._ser = None
+                    time.sleep(3)
+                    self._detect_and_reconnect()
+
+    def _detect_and_reconnect(self):
+        port = self._detect_port()
+        try:
+            self._ser = serial.Serial(port, self._baud, timeout=1, write_timeout=2)
+            time.sleep(2)
+            logger.info("Arduino reconnected on %s", port)
+        except (serial.SerialException, OSError) as e:
+            logger.warning("Reconnect failed: %s", e)
+            self._ser = None
 
     # ── command senders ────────────────────────────────────────────────────────
 
     def _send(self, cmd: str, val: int = 0):
-        if not self._ser or not self._ser.is_open:
+        if not _SERIAL_AVAILABLE or not self._ser or not self._ser.is_open:
             logger.warning("Serial not open, command dropped: %s", cmd)
             return
         payload = json.dumps({"cmd": cmd, "val": val}) + "\n"
+        logger.debug("Sending to Arduino: %s", payload.strip())
         with self._lock:
             try:
                 self._ser.write(payload.encode())

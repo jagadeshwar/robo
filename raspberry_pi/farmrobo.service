@@ -1,0 +1,15 @@
+[Unit]
+Description=FarmRobo Dashboard
+After=network.target
+
+[Service]
+User=jaggu524
+WorkingDirectory=/home/jaggu524/farm-robo/raspberry_pi
+ExecStart=/usr/bin/python3 /home/jaggu524/farm-robo/raspberry_pi/dashboard/app.py
+Restart=always
+RestartSec=5
+StandardOutput=append:/home/jaggu524/farm-robo/raspberry_pi/logs/farmrobo.log
+StandardError=append:/home/jaggu524/farm-robo/raspberry_pi/logs/farmrobo.log
+
+[Install]
+WantedBy=multi-user.target

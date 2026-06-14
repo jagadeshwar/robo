@@ -45,8 +45,10 @@
   /* control buttons */
   .btn-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .btn { border: none; border-radius: 8px; padding: 10px 14px; cursor: pointer;
-         font-size: 0.85rem; font-weight: 600; transition: opacity 0.15s; }
+         font-size: 0.85rem; font-weight: 600; transition: opacity 0.15s;
+         user-select: none; -webkit-user-select: none; touch-action: none; }
   .btn:hover { opacity: 0.85; }
+  .btn.active { opacity: 0.6; transform: scale(0.96); }
   .btn-blue   { background: #1f6feb; color: #fff; }
   .btn-green  { background: #238636; color: #fff; }
   .btn-orange { background: #9e6a03; color: #fff; }
@@ -156,25 +158,27 @@
   <!-- CONTROLS CARD -->
   <div class="card">
     <h2>Manual Controls</h2>
+    <p style="color:#8b949e;font-size:0.78rem;margin-bottom:10px;">Hold buttons to move · release to stop</p>
     <div class="btn-grid">
       <div></div>
-      <button class="btn btn-blue" onclick="cmd('FORWARD')">Forward</button>
+      <button class="btn btn-blue" onpointerdown="motorDown(this,'FORWARD',200)">▲ Forward</button>
       <div></div>
-      <button class="btn btn-blue" onclick="cmd('LEFT')">Left</button>
-      <button class="btn btn-red"  onclick="cmd('STOP')">STOP</button>
-      <button class="btn btn-blue" onclick="cmd('RIGHT')">Right</button>
+      <button class="btn btn-blue" onpointerdown="motorDown(this,'LEFT',180)">◄ Left</button>
+      <button class="btn btn-red"  onpointerdown="motorRelease()">■ STOP</button>
+      <button class="btn btn-blue" onpointerdown="motorDown(this,'RIGHT',180)">► Right</button>
       <div></div>
-      <button class="btn btn-blue" onclick="cmd('BACKWARD')">Backward</button>
+      <button class="btn btn-blue" onpointerdown="motorDown(this,'BACKWARD',200)">▼ Backward</button>
       <div></div>
     </div>
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
-      <button class="btn btn-green"  onclick="cmd('SPRAY')">Spray ON</button>
-      <button class="btn btn-gray"   onclick="cmd('STOP')">Spray OFF</button>
-      <button class="btn btn-orange" onclick="cmd('WEED')">Weed Cutter</button>
-      <button class="btn btn-gray"   onclick="cmd('STOP')">Cutter OFF</button>
+      <button class="btn btn-green"  onclick="cmd('SPRAY_ON')">Spray ON</button>
+      <button class="btn btn-gray"   onclick="cmd('SPRAY_OFF')">Spray OFF</button>
+      <button class="btn btn-orange" onclick="cmd('WEED_ON')">Weed Cutter ON</button>
+      <button class="btn btn-gray"   onclick="cmd('WEED_OFF')">Weed Cutter OFF</button>
       <button class="btn btn-green"  onclick="cmd('GATE_OPEN')">Open Gate</button>
       <button class="btn btn-red"    onclick="cmd('GATE_CLOSE')">Close Gate</button>
     </div>
+    <div style="margin-top:14px; color:#8b949e; font-size:0.85rem;" id="command-status">Last command: none</div>
   </div>
 
   <!-- IMAGE UPLOAD CARD -->
@@ -206,18 +210,69 @@
 </div>
 
 <script>
+// ── Motor control via HTTP (fire-and-forget for low latency) ──────────────────
+let _motorBtn = null;
+
+function motorCmd(action, speed) {
+  fetch('/api/command', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ action, params: speed ? {speed} : {} }),
+    keepalive: true
+  });
+}
+
+function motorDown(btn, action, speed) {
+  if (_motorBtn) _motorBtn.classList.remove('active');
+  _motorBtn = btn;
+  btn.classList.add('active');
+  motorCmd(action, speed);
+}
+
+function motorRelease() {
+  if (_motorBtn) { _motorBtn.classList.remove('active'); _motorBtn = null; }
+  motorCmd('STOP');
+}
+
+document.addEventListener('pointerup',     motorRelease);
+document.addEventListener('pointercancel', motorRelease);
+
 // ── API helpers ────────────────────────────────────────────────────────────────
 async function api(path, opts={}) {
   const r = await fetch(path, opts);
-  return r.json();
+  let data = null;
+  try {
+    data = await r.json();
+  } catch (err) {
+    throw new Error(`Invalid JSON response from ${path}`);
+  }
+  if (!r.ok) {
+    throw new Error(data?.error || `Request failed with status ${r.status}`);
+  }
+  return data;
+}
+
+function setCommandStatus(text) {
+  const el = document.getElementById('command-status');
+  if (el) el.textContent = text;
 }
 
 async function cmd(action, params={}) {
-  await api('/api/command', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({action, params})
-  });
+  const payload = {action, params};
+  setCommandStatus(`Sending ${action}...`);
+  try {
+    const data = await api('/api/command', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    setCommandStatus(`Last command: ${action}`);
+    return data;
+  } catch (err) {
+    setCommandStatus(`Command failed: ${err.message}`);
+    alert(`Command error: ${err.message}`);
+    throw err;
+  }
 }
 
 // ── state polling ──────────────────────────────────────────────────────────────

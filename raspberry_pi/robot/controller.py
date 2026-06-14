@@ -68,9 +68,7 @@ class RobotController:
             self.state["gate"]     = data.get("gate", "closed")
             self.state["spray"]    = data.get("spray", False)
             self.state["weed"]     = data.get("weed", False)
-
-        if config.GATE_AUTO_CONTROL:
-            self._auto_gate_logic(data)
+        # Auto-gate logic disabled — only manual commands via UI buttons
 
     def _auto_gate_logic(self, data: dict):
         moisture = data.get("moisture", [50, 50, 50])
@@ -129,20 +127,79 @@ class RobotController:
 
     def _execute(self, action: str, params: dict):
         logger.debug("Executing action: %s %s", action, params)
+        # movement commands may include optional `duration` (seconds) and `speed` (0-255)
         if action == "FORWARD":
-            self.arduino.forward(params.get("speed", 0))
+            dur = params.get("duration", 0)
+            try:
+                spd = int(params.get("speed") or config.DEFAULT_MOVE_SPEED)
+            except Exception:
+                spd = config.DEFAULT_MOVE_SPEED
+            logger.debug("Action FORWARD speed=%s dur=%s", spd, dur)
+            self.arduino.forward(spd)
+            if dur and dur > 0:
+                time.sleep(dur)
+                self.arduino.stop()
         elif action == "BACKWARD":
-            self.arduino.backward(params.get("speed", 0))
+            dur = params.get("duration", 0)
+            try:
+                spd = int(params.get("speed") or config.DEFAULT_MOVE_SPEED)
+            except Exception:
+                spd = config.DEFAULT_MOVE_SPEED
+            logger.debug("Action BACKWARD speed=%s dur=%s", spd, dur)
+            self.arduino.backward(spd)
+            if dur and dur > 0:
+                time.sleep(dur)
+                self.arduino.stop()
         elif action == "LEFT":
-            self.arduino.turn_left(params.get("speed", 0))
+            dur = params.get("duration", 0)
+            try:
+                spd = int(params.get("speed") or config.DEFAULT_TURN_SPEED)
+            except Exception:
+                spd = config.DEFAULT_TURN_SPEED
+            logger.debug("Action LEFT speed=%s dur=%s", spd, dur)
+            self.arduino.turn_left(spd)
+            if dur and dur > 0:
+                time.sleep(dur)
+                self.arduino.stop()
         elif action == "RIGHT":
-            self.arduino.turn_right(params.get("speed", 0))
+            dur = params.get("duration", 0)
+            try:
+                spd = int(params.get("speed") or config.DEFAULT_TURN_SPEED)
+            except Exception:
+                spd = config.DEFAULT_TURN_SPEED
+            logger.debug("Action RIGHT speed=%s dur=%s", spd, dur)
+            self.arduino.turn_right(spd)
+            if dur and dur > 0:
+                time.sleep(dur)
+                self.arduino.stop()
         elif action == "STOP":
+            # drain any queued movement commands so STOP is immediate
+            while not self._queue.empty():
+                try:
+                    self._queue.get_nowait()
+                except Exception:
+                    break
             self.arduino.stop()
+        elif action == "SPRAY_ON":
+            self.arduino.spray_on()
+            with self._lock:
+                self.state["spray"] = True
+        elif action == "SPRAY_OFF":
+            self.arduino.spray_off()
+            with self._lock:
+                self.state["spray"] = False
         elif action == "SPRAY":
             duration = params.get("duration", config.SPRAY_DURATION_SEC)
             logger.info("Spraying for %ds", duration)
             self.arduino.spray_for(duration)
+        elif action == "WEED_ON":
+            self.arduino.weed_on()
+            with self._lock:
+                self.state["weed"] = True
+        elif action == "WEED_OFF":
+            self.arduino.weed_off()
+            with self._lock:
+                self.state["weed"] = False
         elif action == "WEED":
             duration = params.get("duration", 3)
             logger.info("Weed remover for %ds", duration)
@@ -158,8 +215,15 @@ class RobotController:
 
     # ── manual command API (called from web dashboard) ──────────────────────────
 
+    # Motor commands bypass the queue so they execute immediately with no latency
+    _IMMEDIATE = {"FORWARD", "BACKWARD", "LEFT", "RIGHT", "STOP"}
+
     def command(self, action: str, params: dict = None):
-        self._queue.put((action.upper(), params or {}))
+        action = action.upper()
+        if action in self._IMMEDIATE:
+            self._execute(action, params or {})
+        else:
+            self._queue.put((action, params or {}))
 
     def get_state(self) -> dict:
         with self._lock:

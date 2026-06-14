@@ -1,7 +1,9 @@
 flask>=3.0
+flask-socketio>=5.3
 pyserial>=3.5
 pillow>=10.0
 numpy>=1.24
-tflite-runtime>=2.14     # Pi-optimised TFLite (no full TF needed)
-# If tflite-runtime is unavailable for your Pi OS, use:
-# tensorflow>=2.15
+# tflite-runtime was removed from PyPI — install separately on the Pi:
+#   pip install tflite-runtime --extra-index-url https://google-coral.github.io/py-repo/
+# Or use full TensorFlow (slower install):
+#   pip install tensorflow

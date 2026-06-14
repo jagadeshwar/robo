@@ -52,25 +52,32 @@ def download_model():
         print(f"Model already exists at {model_path}")
         return
 
-    # Public MobileNetV2 ImageNet TFLite as placeholder
-    # Replace this URL with a PlantVillage fine-tuned model after training
-    url = "https://storage.googleapis.com/download.tensorflow.org/models/tflite/mobilenet_v2_1.0_224_quant_and_labels.zip"
-    zip_path = os.path.join(MODELS_DIR, "mobilenet_tmp.zip")
+    # Prefer a small Plant-disease model hosted on GitHub (fallback URL)
+    # This repository includes a prebuilt TFLite from community projects.
+    # You can replace this with your own hosted .tflite URL.
+    url = "https://raw.githubusercontent.com/akshayrana30/plant-disease-detection/master/model/model.tflite"
 
-    print(f"Downloading base model from {url} ...")
+    print(f"Downloading model from {url} ...")
     try:
-        urllib.request.urlretrieve(url, zip_path)
-        with zipfile.ZipFile(zip_path, "r") as z:
-            for name in z.namelist():
-                if name.endswith(".tflite"):
-                    data = z.read(name)
-                    with open(model_path, "wb") as f:
-                        f.write(data)
-                    print(f"Model extracted → {model_path}")
-                    break
-        os.remove(zip_path)
-        print("\nNOTE: This is a generic ImageNet model. For real disease detection,")
-        print("train on PlantVillage with scripts/train_model.py and replace the file.")
+        # If the URL points directly to a .tflite file, save it to model_path
+        if url.lower().endswith('.tflite'):
+            urllib.request.urlretrieve(url, model_path)
+            print(f"Model downloaded → {model_path}")
+        else:
+            # Otherwise assume a zip archive containing a .tflite
+            zip_path = os.path.join(MODELS_DIR, "mobilenet_tmp.zip")
+            urllib.request.urlretrieve(url, zip_path)
+            with zipfile.ZipFile(zip_path, "r") as z:
+                for name in z.namelist():
+                    if name.endswith(".tflite"):
+                        data = z.read(name)
+                        with open(model_path, "wb") as f:
+                            f.write(data)
+                        print(f"Model extracted → {model_path}")
+                        break
+            os.remove(zip_path)
+        print("\nNOTE: Verify this model's labels and accuracy for your use-case.")
+        print("For best results fine-tune on PlantVillage using scripts/train_model.py")
     except Exception as e:
         print(f"Download failed: {e}")
         print("You can manually place your .tflite model at:", model_path)

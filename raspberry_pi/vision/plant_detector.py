@@ -15,8 +15,12 @@ import os
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
-from PIL import Image
+try:
+    import numpy as np
+    from PIL import Image
+    _IMAGING_AVAILABLE = True
+except ImportError:
+    _IMAGING_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +48,9 @@ class PlantDetector:
         self.labels      = self._load_labels(labels_path)
         self.interpreter = None
 
-        if _TFLITE_AVAILABLE and os.path.exists(model_path):
+        if not _IMAGING_AVAILABLE:
+            logger.warning("numpy/Pillow not installed — detector will return mock results.")
+        elif _TFLITE_AVAILABLE and os.path.exists(model_path):
             self.interpreter = Interpreter(model_path=model_path)
             self.interpreter.allocate_tensors()
             self._input_details  = self.interpreter.get_input_details()
@@ -72,13 +78,13 @@ class PlantDetector:
           "error":      str | None
         }
         """
+        if not _IMAGING_AVAILABLE or self.interpreter is None:
+            return self._mock_result(image_path)
+
         try:
             img = self._preprocess(image_path)
         except Exception as e:
             return self._error(str(e))
-
-        if self.interpreter is None:
-            return self._mock_result(image_path)
 
         try:
             scores = self._run_inference(img)
